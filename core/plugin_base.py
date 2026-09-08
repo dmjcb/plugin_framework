@@ -1,24 +1,21 @@
-class PluginBase:
-    # 插件元信息，若 plugin.json 中为设置，可使用默认值
-    plugin_name = "unnamed"
-    plugin_version = "1.0.0"
-    plugin_description = ""
-    plugin_author = ""
+from typing import TYPE_CHECKING, Optional
 
-    # 运行时由 PluginManager 填充
-    manager = None
-    plugin_config = {}
+if TYPE_CHECKING:
+    from core.plugin_manager import PluginManager
 
-    def setup(self, context):
-        """
-        固定接口 1: 插件加载后调用, 用于初始化。
-        context 中包含 manager 和当前插件的 config。
-        """
-        self.manager = context.manager
-        self.plugin_config = context.config
 
-    def teardown(self):
+class BasePlugin:
+    def __init__(self):
+        self.name: Optional[str] = None
+        self.context: Optional["PluginManager"] = None
+
+    def initialize(self, context):
         """
-        固定接口 2: 插件卸载前调用, 用于释放资源。
+        插件初始化函数。
+        context 为 PluginManager 实例，可用来调用其他插件。
         """
+        self.context = context
+
+    def shutdown(self):
+        """服务关闭时调用，可扩展"""
         pass

@@ -1,0 +1,19 @@
+{
+  "name": "calc",
+  "version": "1.0.0",
+  "description": "基础计算器插件",
+  "entry": "plugin.py",
+  "class": "CalcPlugin",
+  "routes": [
+    {
+      "function": "add",
+      "method": "GET",
+      "path": "/calc/add"
+    },
+    {
+      "function": "mul",
+      "method": "POST",
+      "path": "/calc/mul"
+    }
+  ]
+}
