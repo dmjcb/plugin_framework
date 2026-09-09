@@ -3,21 +3,22 @@
     "version": "1.0.0",
     "description": "基础计算器插件",
     "class": "CalcPlugin",
-    "routes": [
-        {
-            "function": "test",
-            "method": "GET",
-            "path": "/calc/test"
-        },
-        {
-            "function": "add",
-            "method": "GET",
-            "path": "/calc/add"
-        },
-        {
-            "function": "mul",
-            "method": "POST",
-            "path": "/calc/mul"
-        }
-    ]
+    "routes": {
+        "GET": [
+            {
+                "function": "test",
+                "path": "/test"
+            },
+            {
+                "function": "add",
+                "path": "/add"
+            }
+        ],
+        "POST": [
+            {
+                "function": "mul",
+                "path": "/mul"
+            }
+        ]
+    }
 }

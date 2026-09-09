@@ -3,26 +3,26 @@
     "version": "1.0.0",
     "description": "自定义文本插件，演示跨插件调用",
     "class": "TextPlugin",
-    "routes": [
-        {
-            "function": "upper",
-            "method": "GET",
-            "path": "/text/upper"
-        },
-        {
-            "function": "repeat",
-            "method": "POST",
-            "path": "/text/repeat"
-        },
-        {
-            "function": "process_json",
-            "method": "POST",
-            "path": "/text/process-json"
-        },
-        {
-            "function": "use_calc",
-            "method": "GET",
-            "path": "/text/use-calc"
-        }
-    ]
+    "routes": {
+        "GET": [
+            {
+                "function": "upper",
+                "path": "/upper"
+            },
+            {
+                "function": "use_calc",
+                "path": "/use-calc"
+            }
+        ],
+        "POST": [
+            {
+                "function": "repeat",
+                "path": "/repeat"
+            },
+            {
+                "function": "process_json",
+                "path": "/process-json"
+            }
+        ]
+    }
 }

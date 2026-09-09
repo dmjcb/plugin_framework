@@ -48,20 +48,23 @@ plugins/
   "version": "1.0.0",
   "description": "问候示例插件",
   "class": "HelloPlugin",
-  "routes": [
-    {
-      "function": "greet",
-      "method": "GET",
-      "path": "/hello"
-    },
-    {
-      "function": "add_with_calc",
-      "method": "GET",
-      "path": "/hello/add"
-    }
-  ]
+  "routes": {
+    "GET": [
+      {
+        "function": "greet",
+        "path": "/"
+      },
+      {
+        "function": "add_with_calc",
+        "path": "/add"
+      }
+    ],
+    "POST": []
+  }
 }
 ```
+
+`path` 只填写插件内部的相对路径。框架会读取 `name` 并自动添加路径前缀，因此上面的两个 GET 路由最终分别是 `/hello` 和 `/hello/add`。
 
 字段说明：
 
@@ -72,10 +75,11 @@ plugins/
 | `description` | 否 | 插件说明元数据，当前框架不会主动处理 |
 | `entry` | 否 | 自定义入口文件，相对于当前插件目录；省略时使用与目录同名的 `.py` 文件 |
 | `class` | 是 | 入口文件中要实例化的插件类名 |
-| `routes` | 否 | 需要公开为 HTTP 接口的方法列表 |
-| `routes[].function` | 是 | 插件类中的可调用方法名 |
-| `routes[].method` | 否 | HTTP 方法，默认是 `GET` |
-| `routes[].path` | 是 | 注册到 FastAPI 的请求路径 |
+| `routes` | 否 | 按 HTTP 方法划分的路由配置对象 |
+| `routes.GET` | 否 | 需要注册为 GET 接口的路由列表 |
+| `routes.POST` | 否 | 需要注册为 POST 接口的路由列表 |
+| `routes.GET[].function` / `routes.POST[].function` | 是 | 插件类中的可调用方法名 |
+| `routes.GET[].path` / `routes.POST[].path` | 是 | 插件内部相对路径，框架会自动添加 `/{name}` 前缀 |
 
 建议确保插件名称和路由路径在整个项目中唯一。
 
@@ -127,7 +131,7 @@ names = self.context.list_plugins()
 
 ### 5. 配置 HTTP 路由
 
-只有在 `routes` 中声明的方法才会注册为 HTTP 接口。FastAPI 会根据方法签名解析参数：
+只有在 `routes.GET` 或 `routes.POST` 中声明的方法才会注册为 HTTP 接口，不再需要为每个函数填写 `method` 字段。FastAPI 会根据方法签名解析参数：
 
 ```python
 # GET /hello?name=Codex
@@ -153,7 +157,22 @@ class HelloPlugin(PluginBase):
         return {"text": data.text * data.times}
 ```
 
-并在 `hello_plugin.json` 中为 `repeat` 配置 `POST` 路由即可。
+在 `hello_plugin.json` 的 `POST` 列表中添加相对路径即可：
+
+```json
+{
+  "routes": {
+    "POST": [
+      {
+        "function": "repeat",
+        "path": "/repeat"
+      }
+    ]
+  }
+}
+```
+
+由于插件 `name` 是 `hello`，最终接口地址为 `/hello/repeat`。
 
 ## 加载流程
 
@@ -163,7 +182,7 @@ class HelloPlugin(PluginBase):
 2. 递归发现文件名与所在目录同名的 JSON 插件配置；
 3. 加载入口模块并实例化插件类；
 4. 为全部插件注入上下文并调用 `initialize`；
-5. 根据各插件的 `routes` 配置注册 FastAPI 路由。
+5. 根据各插件的 `routes.GET`、`routes.POST` 配置注册 FastAPI 路由，并自动添加插件名称前缀。
 
 新增插件不需要修改 `main.py` 或 `core` 中的代码。
 
