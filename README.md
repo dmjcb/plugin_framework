@@ -21,6 +21,8 @@
 
 插件目录可以嵌套。`PluginManager` 会递归查找 JSON 文件，但仅把文件名与所在目录名相同的文件视为插件配置。例如，`calc_plugin/calc_plugin.json` 会被发现，`calc_plugin/plugin.json` 不会被发现。
 
+阅读 `core/plugin_manager.py` 时，建议先看 `PluginManager` 开头集中列出的公开方法，了解整体流程；再按“配置发现与解析”“依赖解析与插件加载”“路由收集与注册”三个分区查看实现细节。`PluginDefinition` 表示校验后的插件配置，`RouteDefinition` 表示一条装饰器路由，避免在核心流程中反复操作无结构字典。
+
 ## 新增插件
 
 下面以新增 `hello` 插件为例。
@@ -178,6 +180,14 @@ def repeat(self, data: RepeatRequest):
 6. 读取插件方法上的路由装饰器并注册 FastAPI 路由，同时自动添加插件名称前缀。
 
 新增插件不需要修改 `main.py` 或 `core` 中的代码。
+
+## 运行测试
+
+项目使用 Python 标准库 `unittest`，不需要额外安装测试框架：
+
+```bash
+python -m unittest discover -s tests -v
+```
 
 ## 启动和验证
 
