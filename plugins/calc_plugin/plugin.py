@@ -1,6 +1,9 @@
-from core.plugin_base import BasePlugin
+from core.plugin_base import PluginBase
 
-class CalcPlugin(BasePlugin):
+class CalcPlugin(PluginBase):
+    def test(self):
+        return {"result": 6666}
+
     def add(self, a: float = 0, b: float = 0):
         return {"result": a + b}
 

@@ -1,56 +1,187 @@
-## 插件
+# Python 插件化 FastAPI 框架
 
-### 文件
+框架会扫描 `plugins` 目录中的 `plugin.json`，按配置动态加载插件、初始化插件，并将插件方法注册为 FastAPI 路由。插件之间可以通过注入的 `context` 获取或调用其他插件。
 
-#### plugin.json
+## 项目结构
 
-每个插件目录下必须存在 plugin.json
+```text
+.
+├── core/
+│   ├── plugin_base.py       # 插件基类
+│   └── plugin_manager.py    # 插件发现、加载、上下文和路由注册
+├── plugins/
+│   ├── calc_plugin/         # 示例：计算插件
+│   │   ├── plugin.json
+│   │   └── plugin.py
+│   └── text_plugin/         # 示例：文本插件及跨插件调用
+│       ├── plugin.json
+│       └── plugin.py
+└── main.py                  # FastAPI 应用入口
+```
+
+插件目录可以嵌套；`PluginManager` 会递归查找所有名为 `plugin.json` 的文件。
+
+## 新增插件
+
+下面以新增 `hello` 插件为例。
+
+### 1. 创建插件目录
+
+在 `plugins` 下新建目录：
+
+```text
+plugins/
+└── hello_plugin/
+    ├── plugin.json
+    └── plugin.py
+```
+
+目录名不作为插件标识，插件的唯一名称由 `plugin.json` 中的 `name` 决定。
+
+### 2. 编写插件配置
+
+创建 `plugins/hello_plugin/plugin.json`：
 
 ```json
 {
-  "name": "插件名称，唯一",
+  "name": "hello",
   "version": "1.0.0",
-  "description": "插件描述",
-  "entry": "插件入口 Python 文件名",
-  "class": "插件入口文件中的类名",
+  "description": "问候示例插件",
+  "entry": "plugin.py",
+  "class": "HelloPlugin",
   "routes": [
     {
-      "function": "公开函数名",
-      "method": "GET 或 POST",
-      "path": "API的URL 路径"
+      "function": "greet",
+      "method": "GET",
+      "path": "/hello"
+    },
+    {
+      "function": "add_with_calc",
+      "method": "GET",
+      "path": "/hello/add"
     }
   ]
 }
 ```
 
-#### plugin.py
+字段说明：
 
-包含插件的具体实现
+| 字段 | 是否必需 | 说明 |
+| --- | --- | --- |
+| `name` | 是 | 插件唯一名称，也是获取插件时使用的名称 |
+| `version` | 否 | 插件版本元数据，当前框架不会主动处理 |
+| `description` | 否 | 插件说明元数据，当前框架不会主动处理 |
+| `entry` | 否 | 插件入口文件，相对于当前插件目录；默认是 `__init__.py` |
+| `class` | 是 | 入口文件中要实例化的插件类名 |
+| `routes` | 否 | 需要公开为 HTTP 接口的方法列表 |
+| `routes[].function` | 是 | 插件类中的可调用方法名 |
+| `routes[].method` | 否 | HTTP 方法，默认是 `GET` |
+| `routes[].path` | 是 | 注册到 FastAPI 的请求路径 |
 
-```py
-class BasePlugin:
-    def __init__(self):
-        self.name = None
-        self.context = None
+建议确保插件名称和路由路径在整个项目中唯一。
 
+### 3. 实现插件类
+
+创建 `plugins/hello_plugin/plugin.py`：
+
+```python
+from core.plugin_base import PluginBase
+
+
+class HelloPlugin(PluginBase):
     def initialize(self, context):
-        """所有插件加载后，由 PluginManager 调用"""
-        self.context = context
+        """所有插件加载完成后执行一次初始化。"""
+        super().initialize(context)
 
-    def shutdown(self):
-        pass
+    def greet(self, name: str = "World"):
+        return {"message": f"Hello, {name}!"}
+
+    def add_with_calc(self, a: float = 0, b: float = 0):
+        """通过插件上下文调用已经加载的 calc 插件。"""
+        return self.context.call("calc", "add", a, b)
 ```
 
-### 新增
+插件类通常继承 `PluginBase`。框架实例化插件后，会为其设置：
 
-假设需要新增一个 hello 插件：
+- `self.name`：`plugin.json` 中配置的插件名称；
+- `self.context`：当前 `PluginManager` 实例，可用于访问其他插件。
 
-1. 在 plugins/ 下新建 hello/ 目录
+如果插件不需要额外初始化，可以不重写 `initialize`。如果重写，建议调用 `super().initialize(context)`。
 
-2. 编写 plugin.json；
+### 4. 使用插件上下文
 
-3. 编写 plugin.py，定义插件类和公开函数；
+`PluginManager` 同时承担插件上下文职责，提供以下接口：
 
-4. 如有插件间调用，使用 self.context.get_plugin("other_plugin_name")；
+```python
+# 获取插件实例
+calc = self.context.get_plugin("calc")
+result = calc.add(1, 2)
 
-5. 启动应用，框架自动发现并注册接口，无需修改核心代码。
+# 直接调用插件方法
+result = self.context.call("calc", "add", 1, 2)
+
+# 获取所有已加载插件的名称
+names = self.context.list_plugins()
+```
+
+所有插件会先完成加载，再统一执行 `initialize`，因此可以在初始化阶段或业务方法中访问其他已加载插件。请求不存在的插件会抛出 `KeyError`；调用不存在的方法会抛出 `AttributeError`。
+
+### 5. 配置 HTTP 路由
+
+只有在 `routes` 中声明的方法才会注册为 HTTP 接口。FastAPI 会根据方法签名解析参数：
+
+```python
+# GET /hello?name=Codex
+def greet(self, name: str = "World"):
+    return {"message": f"Hello, {name}!"}
+```
+
+简单参数通常来自查询参数。需要接收 JSON 请求体时，可以使用 Pydantic 模型：
+
+```python
+from pydantic import BaseModel
+
+from core.plugin_base import PluginBase
+
+
+class RepeatRequest(BaseModel):
+    text: str
+    times: int = 1
+
+
+class HelloPlugin(PluginBase):
+    def repeat(self, data: RepeatRequest):
+        return {"text": data.text * data.times}
+```
+
+并在 `plugin.json` 中为 `repeat` 配置 `POST` 路由即可。
+
+## 加载流程
+
+应用启动时，`main.py` 依次执行：
+
+1. 创建 `PluginManager` 并指定 `plugins` 目录；
+2. 递归发现所有 `plugin.json`；
+3. 加载入口模块并实例化插件类；
+4. 为全部插件注入上下文并调用 `initialize`；
+5. 根据各插件的 `routes` 配置注册 FastAPI 路由。
+
+新增插件不需要修改 `main.py` 或 `core` 中的代码。
+
+## 启动和验证
+
+安装依赖后启动应用：
+
+```bash
+pip install fastapi uvicorn pydantic
+uvicorn main:app --reload
+```
+
+启动后可访问：
+
+- `http://127.0.0.1:8000/`：查看已加载插件；
+- `http://127.0.0.1:8000/docs`：通过 Swagger UI 查看和调用所有插件路由；
+- `http://127.0.0.1:8000/hello?name=Codex`：调用上面的问候示例；
+- `http://127.0.0.1:8000/hello/add?a=1&b=2`：验证跨插件调用。
+
+如果入口文件不存在、未配置 `class`、配置的方法不可调用，框架会在加载或注册路由时抛出对应异常；无效 JSON 和缺少 `name` 的配置会记录日志并被忽略。

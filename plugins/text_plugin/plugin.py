@@ -1,17 +1,14 @@
-# -*- coding: utf-8 -*-
 from pydantic import BaseModel
 
-from core.plugin_base import BasePlugin
-
+from core.plugin_base import PluginBase
+from plugins.calc_plugin.plugin import CalcPlugin
 
 class RepeatRequest(BaseModel):
     text: str
     times: int = 1
 
 
-class TextPlugin(BasePlugin):
-    """自定义文本处理插件"""
-
+class TextPlugin(PluginBase):
     def upper(self, text: str = "hello"):
         return {"text": text.upper()}
 
@@ -24,7 +21,7 @@ class TextPlugin(BasePlugin):
         本插件通过 context 获取已加载的 calc 插件，
         并调用其 add 和 sub 方法。
         """
-        calc = self.context.get_plugin("calc")
+        calc: CalcPlugin = self.context.get_plugin("calc")
         return {
             "a": a,
             "b": b,

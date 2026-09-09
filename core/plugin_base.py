@@ -4,7 +4,7 @@ if TYPE_CHECKING:
     from core.plugin_manager import PluginManager
 
 
-class BasePlugin:
+class PluginBase:
     def __init__(self):
         self.name: Optional[str] = None
         self.context: Optional["PluginManager"] = None
