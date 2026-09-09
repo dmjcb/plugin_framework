@@ -1,6 +1,3 @@
 {
-    "name": "calc",
-    "version": "1.0.0",
-    "description": "基础计算器插件",
-    "class": "CalcPlugin"
+    "name": "calc"
 }

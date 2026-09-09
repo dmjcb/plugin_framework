@@ -45,9 +45,7 @@ plugins/
 ```json
 {
   "name": "hello",
-  "version": "1.0.0",
-  "description": "问候示例插件",
-  "class": "HelloPlugin"
+  "dependencies": ["calc"]
 }
 ```
 
@@ -56,12 +54,23 @@ plugins/
 | 字段 | 是否必需 | 说明 |
 | --- | --- | --- |
 | `name` | 是 | 插件唯一名称，也是获取插件时使用的名称 |
-| `version` | 否 | 插件版本元数据，当前框架不会主动处理 |
-| `description` | 否 | 插件说明元数据，当前框架不会主动处理 |
-| `entry` | 否 | 自定义入口文件，相对于当前插件目录；省略时使用与目录同名的 `.py` 文件 |
-| `class` | 是 | 入口文件中要实例化的插件类名 |
+| `enabled` | 否 | 是否启用插件，默认是 `true` |
+| `dependencies` | 否 | 当前插件依赖的其他插件名称列表，默认是空列表 |
+| `entry` | 否 | 非标准入口文件名的兼容配置；默认使用与目录同名的 `.py` 文件 |
+| `class` | 否 | 非标准插件类名的兼容配置；默认根据目录名推导 |
 
-建议确保插件名称和路由路径在整个项目中唯一。
+例如，目录名 `hello_plugin` 会自动对应入口文件 `hello_plugin.py` 和类名 `HelloPlugin`，因此通常不需要配置 `entry` 和 `class`。示例中的 `hello` 插件会在 `calc` 之后加载和初始化；依赖不存在、被禁用或形成循环时，应用会在启动期间报错。
+
+如果需要临时停用插件，可以设置：
+
+```json
+{
+  "name": "hello",
+  "enabled": false
+}
+```
+
+建议确保插件名称和路由路径在整个项目中唯一。JSON 配置中不再声明路由，GET 和 POST 路由统一使用代码装饰器管理。
 
 ### 3. 实现插件类
 
@@ -155,7 +164,7 @@ def repeat(self, data: RepeatRequest):
     return {"text": data.text * data.times}
 ```
 
-自定义后的完整地址为 `POST /hello/repeat-text`。装饰器仅支持 `GET` 和 `POST`，同一个函数也可以叠加多个装饰器。为兼容已有插件，JSON 中原有的 `routes.GET`、`routes.POST` 配置仍然可以使用；新插件推荐直接使用装饰器。
+自定义后的完整地址为 `POST /hello/repeat-text`。装饰器仅支持 `GET` 和 `POST`，同一个函数也可以叠加多个装饰器。
 
 ## 加载流程
 
@@ -163,9 +172,10 @@ def repeat(self, data: RepeatRequest):
 
 1. 创建 `PluginManager` 并指定 `plugins` 目录；
 2. 递归发现文件名与所在目录同名的 JSON 插件配置；
-3. 加载入口模块并实例化插件类；
-4. 为全部插件注入上下文并调用 `initialize`；
-5. 读取插件方法上的路由装饰器并注册 FastAPI 路由，同时自动添加插件名称前缀。
+3. 跳过 `enabled: false` 的插件，校验依赖是否存在、是否启用以及是否形成循环；
+4. 按依赖顺序加载入口模块并实例化自动推导出的插件类；
+5. 为全部插件注入上下文，并按依赖顺序调用 `initialize`；
+6. 读取插件方法上的路由装饰器并注册 FastAPI 路由，同时自动添加插件名称前缀。
 
 新增插件不需要修改 `main.py` 或 `core` 中的代码。
 
@@ -205,4 +215,4 @@ uvicorn main:app --reload
 }
 ```
 
-如果入口文件不存在、未配置 `class`、配置的方法不可调用，框架会在加载或注册路由时抛出对应异常；无效 JSON 和缺少 `name` 的配置会记录日志并被忽略。
+如果入口文件或推导出的插件类不存在，框架会在加载时抛出异常；依赖缺失、依赖被禁用和循环依赖也会阻止应用启动。无效 JSON 和缺少 `name` 的配置会记录日志并被忽略。

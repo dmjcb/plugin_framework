@@ -1,7 +1,11 @@
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel
 
 from core.plugin_base import PluginBase, plugin_route
-from plugins.calc_plugin.calc_plugin import CalcPlugin
+
+if TYPE_CHECKING:
+    from plugins.calc_plugin.calc_plugin import CalcPlugin
 
 
 class RepeatRequest(BaseModel):
@@ -40,7 +44,7 @@ class TextPlugin(PluginBase):
         本插件通过 context 获取已加载的 calc 插件，
         并调用其 add 和 sub 方法。
         """
-        calc: CalcPlugin = self.context.get_plugin("calc")
+        calc: "CalcPlugin" = self.context.get_plugin("calc")
         return {
             "a": a,
             "b": b,
