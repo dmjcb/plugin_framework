@@ -2,7 +2,6 @@
     "name": "text",
     "version": "1.0.0",
     "description": "自定义文本插件，演示跨插件调用",
-    "entry": "plugin.py",
     "class": "TextPlugin",
     "routes": [
         {

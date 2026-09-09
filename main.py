@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
 import sys
 from pathlib import Path
 
-# 确保项目根目录在 sys.path 中
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -16,21 +14,15 @@ from core.plugin_manager import PluginManager
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Python 插件化 FastAPI 框架",
-        description="通过 plugin.json 自动发现并加载插件",
+        description="通过与插件目录同名的 JSON 配置自动发现并加载插件",
         version="1.0.0"
     )
 
-    # 1. 扫描和加载插件
-    manager = PluginManager(plugin_dir="./plugins")
+    manager = PluginManager(plugin_dir=ROOT / "plugins")
     manager.load_all()
-
-    # 2. 初始化插件
     manager.initialize_all()
-
-    # 3. 注册插件公开接口
     manager.register_routes(app)
 
-    # 4. 根路径提示
     @app.get("/")
     def root():
         return {
@@ -38,7 +30,6 @@ def create_app() -> FastAPI:
             "plugins": list(manager.plugins.keys())
         }
 
-    # 将 manager 保存到 app 中方便调试
     app.state.plugin_manager = manager
 
     return app

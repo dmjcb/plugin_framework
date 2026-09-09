@@ -1,6 +1,6 @@
 # Python 插件化 FastAPI 框架
 
-框架会扫描 `plugins` 目录中的 `plugin.json`，按配置动态加载插件、初始化插件，并将插件方法注册为 FastAPI 路由。插件之间可以通过注入的 `context` 获取或调用其他插件。
+框架会扫描 `plugins` 下各插件目录中与目录同名的 JSON 配置，按配置动态加载插件、初始化插件，并将插件方法注册为 FastAPI 路由。插件之间可以通过注入的 `context` 获取或调用其他插件。
 
 ## 项目结构
 
@@ -11,15 +11,15 @@
 │   └── plugin_manager.py    # 插件发现、加载、上下文和路由注册
 ├── plugins/
 │   ├── calc_plugin/         # 示例：计算插件
-│   │   ├── plugin.json
-│   │   └── plugin.py
+│   │   ├── calc_plugin.json
+│   │   └── calc_plugin.py
 │   └── text_plugin/         # 示例：文本插件及跨插件调用
-│       ├── plugin.json
-│       └── plugin.py
+│       ├── text_plugin.json
+│       └── text_plugin.py
 └── main.py                  # FastAPI 应用入口
 ```
 
-插件目录可以嵌套；`PluginManager` 会递归查找所有名为 `plugin.json` 的文件。
+插件目录可以嵌套。`PluginManager` 会递归查找 JSON 文件，但仅把文件名与所在目录名相同的文件视为插件配置。例如，`calc_plugin/calc_plugin.json` 会被发现，`calc_plugin/plugin.json` 不会被发现。
 
 ## 新增插件
 
@@ -32,22 +32,21 @@
 ```text
 plugins/
 └── hello_plugin/
-    ├── plugin.json
-    └── plugin.py
+    ├── hello_plugin.json
+    └── hello_plugin.py
 ```
 
-目录名不作为插件标识，插件的唯一名称由 `plugin.json` 中的 `name` 决定。
+目录名决定配置文件和默认入口文件的名称；插件运行时的唯一名称仍由 JSON 配置中的 `name` 决定。
 
 ### 2. 编写插件配置
 
-创建 `plugins/hello_plugin/plugin.json`：
+创建 `plugins/hello_plugin/hello_plugin.json`：
 
 ```json
 {
   "name": "hello",
   "version": "1.0.0",
   "description": "问候示例插件",
-  "entry": "plugin.py",
   "class": "HelloPlugin",
   "routes": [
     {
@@ -71,7 +70,7 @@ plugins/
 | `name` | 是 | 插件唯一名称，也是获取插件时使用的名称 |
 | `version` | 否 | 插件版本元数据，当前框架不会主动处理 |
 | `description` | 否 | 插件说明元数据，当前框架不会主动处理 |
-| `entry` | 否 | 插件入口文件，相对于当前插件目录；默认是 `__init__.py` |
+| `entry` | 否 | 自定义入口文件，相对于当前插件目录；省略时使用与目录同名的 `.py` 文件 |
 | `class` | 是 | 入口文件中要实例化的插件类名 |
 | `routes` | 否 | 需要公开为 HTTP 接口的方法列表 |
 | `routes[].function` | 是 | 插件类中的可调用方法名 |
@@ -82,7 +81,7 @@ plugins/
 
 ### 3. 实现插件类
 
-创建 `plugins/hello_plugin/plugin.py`：
+创建 `plugins/hello_plugin/hello_plugin.py`：
 
 ```python
 from core.plugin_base import PluginBase
@@ -103,7 +102,7 @@ class HelloPlugin(PluginBase):
 
 插件类通常继承 `PluginBase`。框架实例化插件后，会为其设置：
 
-- `self.name`：`plugin.json` 中配置的插件名称；
+- `self.name`：插件 JSON 配置中声明的插件名称；
 - `self.context`：当前 `PluginManager` 实例，可用于访问其他插件。
 
 如果插件不需要额外初始化，可以不重写 `initialize`。如果重写，建议调用 `super().initialize(context)`。
@@ -154,14 +153,14 @@ class HelloPlugin(PluginBase):
         return {"text": data.text * data.times}
 ```
 
-并在 `plugin.json` 中为 `repeat` 配置 `POST` 路由即可。
+并在 `hello_plugin.json` 中为 `repeat` 配置 `POST` 路由即可。
 
 ## 加载流程
 
 应用启动时，`main.py` 依次执行：
 
 1. 创建 `PluginManager` 并指定 `plugins` 目录；
-2. 递归发现所有 `plugin.json`；
+2. 递归发现文件名与所在目录同名的 JSON 插件配置；
 3. 加载入口模块并实例化插件类；
 4. 为全部插件注入上下文并调用 `initialize`；
 5. 根据各插件的 `routes` 配置注册 FastAPI 路由。

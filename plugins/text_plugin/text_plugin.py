@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 from core.plugin_base import PluginBase
-from plugins.calc_plugin.plugin import CalcPlugin
+from plugins.calc_plugin.calc_plugin import CalcPlugin
 
 class RepeatRequest(BaseModel):
     text: str

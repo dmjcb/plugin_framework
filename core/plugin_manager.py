@@ -17,13 +17,16 @@ class PluginManager:
 
     def discover(self):
         """
-        自动发现指定目录下所有 plugin.json
-        这里使用 rglob,因此支持嵌套目录
+        自动发现配置文件名与所在目录同名的插件。
+        例如:calc_plugin/calc_plugin.json。
         """
         if not self.plugin_dir.exists():
             raise FileNotFoundError(f"插件目录不存在: {self.plugin_dir}")
 
-        for manifest_path in self.plugin_dir.rglob("plugin.json"):
+        for manifest_path in self.plugin_dir.rglob("*.json"):
+            if manifest_path.stem != manifest_path.parent.name:
+                continue
+
             try:
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 name = manifest.get("name")
@@ -50,12 +53,13 @@ class PluginManager:
         return self.plugins
 
     def load_plugin(self, name: str):
-        """动态加载单个插件"""
         if name not in self._manifests:
             raise KeyError(f"插件 {name} 不存在")
 
         manifest = self._manifests[name]
-        entry = Path(manifest["_dir"]) / manifest.get("entry", "__init__.py")
+        plugin_path = Path(manifest["_dir"])
+        default_entry = f"{plugin_path.name}.py"
+        entry = plugin_path / manifest.get("entry", default_entry)
         class_name = manifest.get("class")
 
         if not entry.exists():
@@ -85,7 +89,7 @@ class PluginManager:
 
     def initialize_all(self):
         """
-        为所有插件注入 context, 并调用插件自身的 initialize 方法。
+        为所有插件注入 context, 并调用插件自身的 initialize 方法
         分两步保证所有插件都已加载且统一可访问。
         """
         for name, plugin in self.plugins.items():
@@ -99,7 +103,7 @@ class PluginManager:
 
     def register_routes(self, app):
         """
-        根据 plugin.json 中 routes 配置，将插件公开函数注册为 FastAPI 接口。
+        根据插件 JSON 配置中的 routes，将插件公开函数注册为 FastAPI 接口
         """
         for plugin_name, manifest in self._manifests.items():
             plugin = self.plugins.get(plugin_name)
@@ -135,17 +139,14 @@ class PluginManager:
                 logger.info("注册路由 %s %s -> %s.%s", method, path, plugin_name, function_name)
 
     def get_plugin(self, name: str):
-        """获取插件实例"""
         if name not in self.plugins:
             raise KeyError(f"插件 {name} 未加载，已加载插件: {list(self.plugins)}")
         return self.plugins[name]
 
     def call(self, plugin_name: str, method_name: str, *args, **kwargs):
-        """调用指定插件的公开方法"""
         plugin = self.get_plugin(plugin_name)
         method = getattr(plugin, method_name)
         return method(*args, **kwargs)
 
     def list_plugins(self):
-        """返回所有已加载插件名称"""
         return list(self.plugins)
