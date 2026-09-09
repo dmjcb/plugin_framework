@@ -14,7 +14,7 @@ from core.plugin_manager import PluginManager
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Python 插件化 FastAPI 框架",
-        description="通过与插件目录同名的 JSON 配置自动发现并加载插件",
+        description="通过同名 JSON 发现插件，并使用装饰器注册路由",
         version="1.0.0"
     )
 

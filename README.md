@@ -1,6 +1,6 @@
 # Python 插件化 FastAPI 框架
 
-框架会扫描 `plugins` 下各插件目录中与目录同名的 JSON 配置，按配置动态加载插件、初始化插件，并将插件方法注册为 FastAPI 路由。插件之间可以通过注入的 `context` 获取或调用其他插件。
+框架会扫描 `plugins` 下各插件目录中与目录同名的 JSON 配置，动态加载并初始化插件。插件方法可通过装饰器注册为 FastAPI 路由，插件之间可以通过注入的 `context` 获取或调用其他插件。
 
 ## 项目结构
 
@@ -47,24 +47,9 @@ plugins/
   "name": "hello",
   "version": "1.0.0",
   "description": "问候示例插件",
-  "class": "HelloPlugin",
-  "routes": {
-    "GET": [
-      {
-        "function": "greet",
-        "path": "/"
-      },
-      {
-        "function": "add_with_calc",
-        "path": "/add"
-      }
-    ],
-    "POST": []
-  }
+  "class": "HelloPlugin"
 }
 ```
-
-`path` 只填写插件内部的相对路径。框架会读取 `name` 并自动添加路径前缀，因此上面的两个 GET 路由最终分别是 `/hello` 和 `/hello/add`。
 
 字段说明：
 
@@ -75,11 +60,6 @@ plugins/
 | `description` | 否 | 插件说明元数据，当前框架不会主动处理 |
 | `entry` | 否 | 自定义入口文件，相对于当前插件目录；省略时使用与目录同名的 `.py` 文件 |
 | `class` | 是 | 入口文件中要实例化的插件类名 |
-| `routes` | 否 | 按 HTTP 方法划分的路由配置对象 |
-| `routes.GET` | 否 | 需要注册为 GET 接口的路由列表 |
-| `routes.POST` | 否 | 需要注册为 POST 接口的路由列表 |
-| `routes.GET[].function` / `routes.POST[].function` | 是 | 插件类中的可调用方法名 |
-| `routes.GET[].path` / `routes.POST[].path` | 是 | 插件内部相对路径，框架会自动添加 `/{name}` 前缀 |
 
 建议确保插件名称和路由路径在整个项目中唯一。
 
@@ -88,7 +68,7 @@ plugins/
 创建 `plugins/hello_plugin/hello_plugin.py`：
 
 ```python
-from core.plugin_base import PluginBase
+from core.plugin_base import PluginBase, plugin_route
 
 
 class HelloPlugin(PluginBase):
@@ -96,13 +76,17 @@ class HelloPlugin(PluginBase):
         """所有插件加载完成后执行一次初始化。"""
         super().initialize(context)
 
+    @plugin_route("GET")
     def greet(self, name: str = "World"):
         return {"message": f"Hello, {name}!"}
 
+    @plugin_route("GET", "/add")
     def add_with_calc(self, a: float = 0, b: float = 0):
         """通过插件上下文调用已经加载的 calc 插件。"""
         return self.context.call("calc", "add", a, b)
 ```
+
+未指定 `path` 的 `greet` 使用函数名作为路由，最终地址为 `/hello/greet`。`add_with_calc` 指定了自定义路径 `/add`，最终地址为 `/hello/add`。
 
 插件类通常继承 `PluginBase`。框架实例化插件后，会为其设置：
 
@@ -131,20 +115,25 @@ names = self.context.list_plugins()
 
 ### 5. 配置 HTTP 路由
 
-只有在 `routes.GET` 或 `routes.POST` 中声明的方法才会注册为 HTTP 接口，不再需要为每个函数填写 `method` 字段。FastAPI 会根据方法签名解析参数：
+使用 `plugin_route` 装饰器声明 GET 或 POST 接口：
 
 ```python
-# GET /hello?name=Codex
+from core.plugin_base import plugin_route
+
+
+@plugin_route("GET")
 def greet(self, name: str = "World"):
     return {"message": f"Hello, {name}!"}
 ```
 
-简单参数通常来自查询参数。需要接收 JSON 请求体时，可以使用 Pydantic 模型：
+未填写 `path` 时默认使用函数名，因此完整地址为 `/{插件名}/{函数名}`。上例的插件名为 `hello`，最终地址是 `/hello/greet`。简单参数通常来自查询参数。
+
+需要接收 JSON 请求体时，可以使用 Pydantic 模型和 POST 装饰器：
 
 ```python
 from pydantic import BaseModel
 
-from core.plugin_base import PluginBase
+from core.plugin_base import PluginBase, plugin_route
 
 
 class RepeatRequest(BaseModel):
@@ -153,26 +142,20 @@ class RepeatRequest(BaseModel):
 
 
 class HelloPlugin(PluginBase):
+    @plugin_route("POST")
     def repeat(self, data: RepeatRequest):
         return {"text": data.text * data.times}
 ```
 
-在 `hello_plugin.json` 的 `POST` 列表中添加相对路径即可：
+该方法会自动注册为 `POST /hello/repeat`。需要自定义路由时，传入插件内部的相对路径：
 
-```json
-{
-  "routes": {
-    "POST": [
-      {
-        "function": "repeat",
-        "path": "/repeat"
-      }
-    ]
-  }
-}
+```python
+@plugin_route("POST", "/repeat-text")
+def repeat(self, data: RepeatRequest):
+    return {"text": data.text * data.times}
 ```
 
-由于插件 `name` 是 `hello`，最终接口地址为 `/hello/repeat`。
+自定义后的完整地址为 `POST /hello/repeat-text`。装饰器仅支持 `GET` 和 `POST`，同一个函数也可以叠加多个装饰器。为兼容已有插件，JSON 中原有的 `routes.GET`、`routes.POST` 配置仍然可以使用；新插件推荐直接使用装饰器。
 
 ## 加载流程
 
@@ -182,7 +165,7 @@ class HelloPlugin(PluginBase):
 2. 递归发现文件名与所在目录同名的 JSON 插件配置；
 3. 加载入口模块并实例化插件类；
 4. 为全部插件注入上下文并调用 `initialize`；
-5. 根据各插件的 `routes.GET`、`routes.POST` 配置注册 FastAPI 路由，并自动添加插件名称前缀。
+5. 读取插件方法上的路由装饰器并注册 FastAPI 路由，同时自动添加插件名称前缀。
 
 新增插件不需要修改 `main.py` 或 `core` 中的代码。
 
@@ -200,7 +183,7 @@ uvicorn main:app --reload
 - `http://127.0.0.1:8000/`：查看已加载插件；
 - `http://127.0.0.1:8000/docs`：通过 Swagger UI 查看和调用所有插件路由；
 - `POST http://127.0.0.1:8000/text/process-json`：发送 JSON 并返回简单处理结果；
-- `http://127.0.0.1:8000/hello?name=Codex`：调用上面的问候示例；
+- `http://127.0.0.1:8000/hello/greet?name=Codex`：调用上面的问候示例；
 - `http://127.0.0.1:8000/hello/add?a=1&b=2`：验证跨插件调用。
 
 `process-json` 接口请求示例：

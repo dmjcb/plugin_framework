@@ -2,23 +2,5 @@
     "name": "calc",
     "version": "1.0.0",
     "description": "基础计算器插件",
-    "class": "CalcPlugin",
-    "routes": {
-        "GET": [
-            {
-                "function": "test",
-                "path": "/test"
-            },
-            {
-                "function": "add",
-                "path": "/add"
-            }
-        ],
-        "POST": [
-            {
-                "function": "mul",
-                "path": "/mul"
-            }
-        ]
-    }
+    "class": "CalcPlugin"
 }

@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from core.plugin_base import PluginBase
+from core.plugin_base import PluginBase, plugin_route
 from plugins.calc_plugin.calc_plugin import CalcPlugin
 
 
@@ -10,12 +10,15 @@ class RepeatRequest(BaseModel):
 
 
 class TextPlugin(PluginBase):
+    @plugin_route("GET")
     def upper(self, text: str = "hello"):
         return {"text": text.upper()}
 
+    @plugin_route("POST")
     def repeat(self, data: RepeatRequest):
         return {"text": data.text * data.times}
 
+    @plugin_route("POST", "/process-json")
     def process_json(self, data: dict):
         """接收 POST 请求中的 JSON 数据，简单处理后返回。
 
@@ -30,6 +33,7 @@ class TextPlugin(PluginBase):
             "result": message,
         }
 
+    @plugin_route("GET", "/use-calc")
     def use_calc(self, a: float = 0, b: float = 0):
         """
         跨插件调用示例：

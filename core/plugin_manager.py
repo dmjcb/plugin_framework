@@ -102,7 +102,7 @@ class PluginManager:
 
     def register_routes(self, app):
         """
-        根据插件 JSON 配置中按 HTTP 方法分组的 routes 注册接口。
+        根据方法装饰器或插件 JSON 中的 routes 注册接口。
         每条相对路径都会自动添加插件 name 作为路径前缀。
         """
         for plugin_name, manifest in self._manifests.items():
@@ -111,48 +111,72 @@ class PluginManager:
                 logger.warning("插件 %s 未加载，跳过路由注册", plugin_name)
                 continue
 
+            route_specs = []
             route_groups = manifest.get("routes", {})
             if not isinstance(route_groups, dict):
                 logger.warning("插件 %s 的 routes 必须按 GET、POST 分组", plugin_name)
-                continue
+            else:
+                for method in ("GET", "POST"):
+                    for route in route_groups.get(method, []):
+                        function_name = route.get("function")
+                        relative_path = route.get("path")
+                        if not function_name or relative_path is None:
+                            logger.warning("插件 %s 存在无效路由配置", plugin_name)
+                            continue
+                        route_specs.append((method, function_name, relative_path))
 
-            for method in ("GET", "POST"):
-                for route in route_groups.get(method, []):
-                    function_name = route.get("function")
-                    relative_path = route.get("path")
-
-                    if not function_name or relative_path is None:
-                        logger.warning("插件 %s 存在无效路由配置", plugin_name)
-                        continue
-
-                    func = getattr(plugin, function_name, None)
-                    if not callable(func):
-                        raise AttributeError(
-                            f"插件 {plugin_name} 中找不到可调用函数: {function_name}"
-                        )
-
-                    route_handler = getattr(app, method.lower(), None)
-                    if route_handler is None:
-                        raise ValueError(f"不支持的 HTTP 方法: {method}")
-
-                    suffix = str(relative_path).strip("/")
-                    path = f"/{plugin_name}"
-                    if suffix:
-                        path = f"{path}/{suffix}"
-
-                    route_handler(
-                        path,
-                        tags=[plugin_name],
-                        name=f"{plugin_name}_{function_name}"
-                    )(func)
-
-                    logger.info(
-                        "注册路由 %s %s -> %s.%s",
-                        method,
-                        path,
-                        plugin_name,
-                        function_name,
+            for function_name in dir(plugin):
+                func = getattr(plugin, function_name)
+                if not callable(func):
+                    continue
+                for route in getattr(func, "__plugin_routes__", ()):
+                    relative_path = route["path"]
+                    if relative_path is None:
+                        relative_path = function_name
+                    route_specs.append(
+                        (route["method"], function_name, relative_path)
                     )
+
+            registered_routes = {}
+            for method, function_name, relative_path in route_specs:
+                func = getattr(plugin, function_name, None)
+                if not callable(func):
+                    raise AttributeError(
+                        f"插件 {plugin_name} 中找不到可调用函数: {function_name}"
+                    )
+
+                suffix = str(relative_path).strip("/")
+                path = f"/{plugin_name}"
+                if suffix:
+                    path = f"{path}/{suffix}"
+
+                route_key = (method, path)
+                registered_function = registered_routes.get(route_key)
+                if registered_function:
+                    if registered_function != function_name:
+                        raise ValueError(
+                            f"插件 {plugin_name} 的路由 {method} {path} 存在冲突"
+                        )
+                    continue
+                registered_routes[route_key] = function_name
+
+                route_handler = getattr(app, method.lower(), None)
+                if route_handler is None:
+                    raise ValueError(f"不支持的 HTTP 方法: {method}")
+
+                route_handler(
+                    path,
+                    tags=[plugin_name],
+                    name=f"{plugin_name}_{function_name}"
+                )(func)
+
+                logger.info(
+                    "注册路由 %s %s -> %s.%s",
+                    method,
+                    path,
+                    plugin_name,
+                    function_name,
+                )
 
     def get_plugin(self, name: str):
         if name not in self.plugins:
