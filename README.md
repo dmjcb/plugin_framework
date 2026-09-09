@@ -180,7 +180,27 @@ uvicorn main:app --reload
 
 - `http://127.0.0.1:8000/`：查看已加载插件；
 - `http://127.0.0.1:8000/docs`：通过 Swagger UI 查看和调用所有插件路由；
+- `POST http://127.0.0.1:8000/text/process-json`：发送 JSON 并返回简单处理结果；
 - `http://127.0.0.1:8000/hello?name=Codex`：调用上面的问候示例；
 - `http://127.0.0.1:8000/hello/add?a=1&b=2`：验证跨插件调用。
+
+`process-json` 接口请求示例：
+
+```json
+{
+  "message": "  hello codex  "
+}
+```
+
+返回结果：
+
+```json
+{
+  "received": {
+    "message": "  hello codex  "
+  },
+  "result": "HELLO CODEX"
+}
+```
 
 如果入口文件不存在、未配置 `class`、配置的方法不可调用，框架会在加载或注册路由时抛出对应异常；无效 JSON 和缺少 `name` 的配置会记录日志并被忽略。

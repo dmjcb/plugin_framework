@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from core.plugin_base import PluginBase
 from plugins.calc_plugin.calc_plugin import CalcPlugin
 
+
 class RepeatRequest(BaseModel):
     text: str
     times: int = 1
@@ -14,6 +15,20 @@ class TextPlugin(PluginBase):
 
     def repeat(self, data: RepeatRequest):
         return {"text": data.text * data.times}
+
+    def process_json(self, data: dict):
+        """接收 POST 请求中的 JSON 数据，简单处理后返回。
+
+        请求示例：
+        {
+            "message": "  hello codex  "
+        }
+        """
+        message = str(data.get("message", "")).strip().upper()
+        return {
+            "received": data,
+            "result": message,
+        }
 
     def use_calc(self, a: float = 0, b: float = 0):
         """

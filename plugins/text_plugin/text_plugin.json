@@ -15,6 +15,11 @@
             "path": "/text/repeat"
         },
         {
+            "function": "process_json",
+            "method": "POST",
+            "path": "/text/process-json"
+        },
+        {
             "function": "use_calc",
             "method": "GET",
             "path": "/text/use-calc"
